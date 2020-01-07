@@ -1,6 +1,7 @@
 apply plugin: 'com.android.library'
 apply plugin: 'com.github.dcendents.android-maven'
-group='com.github.Jay-Goo'
+
+group='com.github.karljamoralin'
 
 android {
     compileSdkVersion rootProject.ext.compileSdkVersion
@@ -30,12 +31,10 @@ dependencies {
 
 }
 
-// 指定编码
 tasks.withType(JavaCompile) {
     options.encoding = "UTF-8"
 }
 
-// 打包源码
 task sourcesJar(type: Jar) {
     from android.sourceSets.main.java.srcDirs
     classifier = 'sources'
@@ -48,7 +47,6 @@ task javadoc(type: Javadoc) {
     classpath += configurations.compile
 }
 
-// 制作文档(Javadoc)
 task javadocJar(type: Jar, dependsOn: javadoc) {
     classifier = 'javadoc'
     from javadoc.destinationDir
