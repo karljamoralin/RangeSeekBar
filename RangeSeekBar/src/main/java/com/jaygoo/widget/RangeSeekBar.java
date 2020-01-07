@@ -31,8 +31,6 @@ import static com.jaygoo.widget.SeekBar.INDICATOR_ALWAYS_SHOW;
 
 public class RangeSeekBar extends View {
 
-    private final static int MIN_INTERCEPT_DISTANCE = 100;
-
     //normal seekBar mode
     public final static int SEEKBAR_MODE_SINGLE = 1;
     //RangeSeekBar
@@ -43,7 +41,7 @@ public class RangeSeekBar extends View {
      */
     @IntDef({SEEKBAR_MODE_SINGLE, SEEKBAR_MODE_RANGE})
     @Retention(RetentionPolicy.SOURCE)
-    public @interface SeekBarModeDef {
+    @interface SeekBarModeDef {
     }
 
     //number according to the actual proportion of the number of arranged;
@@ -56,7 +54,7 @@ public class RangeSeekBar extends View {
      */
     @IntDef({TRICK_MARK_MODE_NUMBER, TRICK_MARK_MODE_OTHER})
     @Retention(RetentionPolicy.SOURCE)
-    public @interface TickMarkModeDef {
+    @interface TickMarkModeDef {
     }
 
     //tick mark text gravity
@@ -155,7 +153,7 @@ public class RangeSeekBar extends View {
     //****************** the above is attr value  ******************//
 
     private boolean isEnable = true;
-    float touchDownX,touchDownY;
+    float touchDownX, touchDownY;
     //剩余最小间隔的进度
     float reservePercent;
     boolean isScaleThumb = false;
@@ -559,7 +557,7 @@ public class RangeSeekBar extends View {
 
     //calculate currTouchSB percent by MotionEvent
     protected float calculateCurrentSeekBarPercent(float touchDownX) {
-        if (currTouchSB == null)return 0;
+        if (currTouchSB == null) return 0;
         float percent = (touchDownX - getProgressLeft()) * 1f / (progressWidth);
         if (touchDownX < getProgressLeft()) {
             percent = 0;
@@ -624,35 +622,61 @@ public class RangeSeekBar extends View {
                 return true;
             case MotionEvent.ACTION_MOVE:
                 float x = getEventX(event);
-                if ((seekBarMode == SEEKBAR_MODE_RANGE) && leftSB.currPercent == rightSB.currPercent) {
-                    currTouchSB.materialRestore();
-                    if (callback != null) {
-                        callback.onStopTrackingTouch(this, currTouchSB == leftSB);
-                    }
-                    if (x - touchDownX > 0) {
-                        //method to move right
-                        if (currTouchSB != rightSB) {
-                            currTouchSB.setShowIndicatorEnable(false);
-                            resetCurrentSeekBarThumb();
-                            currTouchSB = rightSB;
-                        }
-                    } else {
-                        //method to move left
-                        if (currTouchSB != leftSB) {
-                            currTouchSB.setShowIndicatorEnable(false);
-                            resetCurrentSeekBarThumb();
-                            currTouchSB = leftSB;
-                        }
-                    }
-                    if (callback != null) {
-                        callback.onStartTrackingTouch(this, currTouchSB == leftSB);
-                    }
-                }
+//                if ((seekBarMode == SEEKBAR_MODE_RANGE) && leftSB.currPercent == rightSB.currPercent) {
+//                    currTouchSB.materialRestore();
+//                    if (callback != null) {
+//                        callback.onStopTrackingTouch(this, currTouchSB == leftSB);
+//                    }
+//                    if (x - touchDownX > 0) {
+//                        //method to move right
+//                        if (currTouchSB != rightSB) {
+//                            currTouchSB.setShowIndicatorEnable(false);
+//                            resetCurrentSeekBarThumb();
+//                            currTouchSB = rightSB;
+//                        }
+//                    } else {
+//                        //method to move left
+//                        if (currTouchSB != leftSB) {
+//                            currTouchSB.setShowIndicatorEnable(false);
+//                            resetCurrentSeekBarThumb();
+//                            currTouchSB = leftSB;
+//                        }
+//                    }
+//                    if (callback != null) {
+//                        callback.onStartTrackingTouch(this, currTouchSB == leftSB);
+//                    }
+//                }
                 scaleCurrentSeekBarThumb();
                 currTouchSB.material = currTouchSB.material >= 1 ? 1 : currTouchSB.material + 0.1f;
                 touchDownX = x;
-                currTouchSB.slide(calculateCurrentSeekBarPercent(touchDownX));
-                currTouchSB.setShowIndicatorEnable(true);
+
+                float seekBarPercent = calculateCurrentSeekBarPercent(touchDownX);
+
+                if (verifyStepsMode() && stepsAutoBonding) {
+                    float percent = calculateCurrentSeekBarPercent(getEventX(event));
+                    float stepPercent = 1.0f / steps;
+                    int stepSelected = new BigDecimal(percent / stepPercent).setScale(0, RoundingMode.HALF_UP).intValue();
+
+                    if (isEnableThumbOverlap()) {
+                        currTouchSB.slide(stepSelected * stepPercent);
+                    } else {
+                        int otherSbStep = 0;
+
+                        if (currTouchSB == leftSB) {
+                            otherSbStep = new BigDecimal(rightSB.currPercent / stepPercent).setScale(0, RoundingMode.HALF_UP).intValue();
+                        } else {
+                            otherSbStep = new BigDecimal(leftSB.currPercent / stepPercent).setScale(0, RoundingMode.HALF_UP).intValue();
+                        }
+
+                        if (stepSelected != otherSbStep) {
+                            currTouchSB.slide(stepSelected * stepPercent);
+                        }
+                    }
+                } else if (currTouchSB == leftSB && seekBarPercent != rightSB.currPercent ||
+                        currTouchSB == rightSB && seekBarPercent != leftSB.currPercent) {
+                    currTouchSB.slide(calculateCurrentSeekBarPercent(touchDownX));
+                    currTouchSB.setShowIndicatorEnable(true);
+                }
 
                 if (callback != null) {
                     SeekBarState[] states = getRangeSeekBarState();
@@ -690,7 +714,22 @@ public class RangeSeekBar extends View {
                     float percent = calculateCurrentSeekBarPercent(getEventX(event));
                     float stepPercent = 1.0f / steps;
                     int stepSelected = new BigDecimal(percent / stepPercent).setScale(0, RoundingMode.HALF_UP).intValue();
-                    currTouchSB.slide(stepSelected * stepPercent);
+
+                    if (isEnableThumbOverlap()) {
+                        currTouchSB.slide(stepSelected * stepPercent);
+                    } else {
+                        int otherSbStep = 0;
+
+                        if (currTouchSB == leftSB) {
+                            otherSbStep = new BigDecimal(rightSB.currPercent / stepPercent).setScale(0, RoundingMode.HALF_UP).intValue();
+                        } else {
+                            otherSbStep = new BigDecimal(leftSB.currPercent / stepPercent).setScale(0, RoundingMode.HALF_UP).intValue();
+                        }
+
+                        if (stepSelected != otherSbStep) {
+                            currTouchSB.slide(stepSelected * stepPercent);
+                        }
+                    }
                 }
 
                 if (seekBarMode == SEEKBAR_MODE_RANGE) {
@@ -972,6 +1011,7 @@ public class RangeSeekBar extends View {
     /**
      * {@link #SEEKBAR_MODE_SINGLE} is single SeekBar
      * {@link #SEEKBAR_MODE_RANGE} is range SeekBar
+     *
      * @param seekBarMode
      */
     public void setSeekBarMode(@SeekBarModeDef int seekBarMode) {
@@ -986,6 +1026,7 @@ public class RangeSeekBar extends View {
     /**
      * {@link #TICK_MARK_GRAVITY_LEFT} is number tick mark, it will locate the position according to the value.
      * {@link #TICK_MARK_GRAVITY_RIGHT} is text tick mark, it will be equally positioned.
+     *
      * @param tickMarkMode
      */
     public void setTickMarkMode(@TickMarkModeDef int tickMarkMode) {
@@ -1017,6 +1058,7 @@ public class RangeSeekBar extends View {
      * {@link #TICK_MARK_GRAVITY_LEFT}
      * {@link #TICK_MARK_GRAVITY_RIGHT}
      * {@link #TICK_MARK_GRAVITY_CENTER}
+     *
      * @param tickMarkGravity
      */
     public void setTickMarkGravity(@TickMarkGravityDef int tickMarkGravity) {
@@ -1163,6 +1205,7 @@ public class RangeSeekBar extends View {
     /**
      * the tick mark layout gravity
      * Gravity.TOP and Gravity.BOTTOM
+     *
      * @param tickMarkLayoutGravity
      */
     public void setTickMarkLayoutGravity(@TickMarkLayoutGravityDef int tickMarkLayoutGravity) {
@@ -1176,6 +1219,7 @@ public class RangeSeekBar extends View {
     /**
      * the RangeSeekBar gravity
      * Gravity.TOP and Gravity.BOTTOM
+     *
      * @param gravity
      */
     public void setGravity(@GravityDef int gravity) {
